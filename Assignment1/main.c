@@ -68,14 +68,15 @@ int isLocalMaximum(){
 
 
 int main(){
-	FILE *filename = fopen("ECG.txt", "r");
-
+	FILE *filename = fopen("ECG10800K.txt", "r");
+	// FILE *filterFile = fopen("checkFile.txt", "w");
 
 	clock_t time = clock();
 
-	for (int i = 0; i < 10000; i++){
+	for (int i = 0; i < 1080000; i++){
 		ECG_out[ECG_pointer] = getNextData(filename);
 		applyFilters();
+		// fprintf(filterFile, "%d\t%d", i+1, MWI_out);
 
 		timeCount += 4;
 
@@ -83,6 +84,7 @@ int main(){
 
 			peak[peak_pointer] = peak_temp_new;
 			printf("%i \n", peak[peak_pointer]);
+
 
 //			printf("Time = %i   Peak no. %i   Peak = %i\n", timeCount, peak_pointer, peak[peak_pointer]);
 
@@ -226,7 +228,7 @@ int main(){
 	//}
 
 
-	printf("Execution time: %lu\n", (long int) (clock()-time) / CLOCKS_PER_SEC);
+	printf("Execution time: %g\n", ((double) (clock()-time)) / CLOCKS_PER_SEC);
 
 	return 0;
 
