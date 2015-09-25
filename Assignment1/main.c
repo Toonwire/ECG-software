@@ -69,14 +69,14 @@ int isLocalMaximum(){
 
 int main(){
 	FILE *filename = fopen("ECG10800K.txt", "r");
-	// FILE *filterFile = fopen("checkFile.txt", "w");
+	FILE *filterFile = fopen("checkFile.txt", "w");
 
 	clock_t time = clock();
 
 	for (int i = 0; i < 1080000; i++){
 		ECG_out[ECG_pointer] = getNextData(filename);
 		applyFilters();
-		// fprintf(filterFile, "%d\t%d", i+1, MWI_out);
+		fprintf(filterFile, "%d\n", MWI_out);
 
 		timeCount += 4;
 
