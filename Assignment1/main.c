@@ -76,7 +76,10 @@ int main(){
 	for (int i = 0; i < 1080000; i++){
 		ECG_out[ECG_pointer] = getNextData(filename);
 		applyFilters();
-		fprintf(filterFile, "%d\n", MWI_out);
+
+		if (MWI_out > 0 && MWI_out < 20000){
+			fprintf(filterFile, "%d\n", MWI_out);
+		}
 
 		timeCount += 4;
 
