@@ -77,10 +77,10 @@ int main(){
 		ECG_out[ECG_pointer] = getNextData(filename);
 		applyFilters();
 
-		/*if (MWI_out > 0 && MWI_out < 20000){
+		//if (MWI_out > 0 && MWI_out < 20000){
 			fprintf(filterFile, "%d\n", MWI_out);
-		}
-		 */
+		//}
+
 		timeCount += 4;
 
 		if (isLocalMaximum()) {
