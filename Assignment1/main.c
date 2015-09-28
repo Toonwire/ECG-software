@@ -73,20 +73,20 @@ int main(){
 
 	clock_t time = clock();
 
-	for (int i = 0; i < 1080000; i++){
+	for (int i = 0; i < 500000; i++){
 		ECG_out[ECG_pointer] = getNextData(filename);
 		applyFilters();
 
-		if (MWI_out > 0 && MWI_out < 20000){
+		/*if (MWI_out > 0 && MWI_out < 20000){
 			fprintf(filterFile, "%d\n", MWI_out);
 		}
-
+		 */
 		timeCount += 4;
 
 		if (isLocalMaximum()) {
 
 			peak[peak_pointer] = peak_temp_new;
-			printf("%i \n", peak[peak_pointer]);
+			//printf("%i \n", peak[peak_pointer]);
 
 
 //			printf("Time = %i   Peak no. %i   Peak = %i\n", timeCount, peak_pointer, peak[peak_pointer]);
@@ -107,7 +107,7 @@ int main(){
 
 					rPeak_pointer++;
 
-					printf("Time = %i          RR = %i            R-Peak no. %i            R-Peak = %i            SPKF = %i            NPKF = %i            Threshold 1 = %i            Threshold 2 = %i            Low = %i            High = %i            Miss = %i\n", timeCount, rr, rPeak_pointer-1, peak[peak_pointer], spkf, npkf, threshold1, threshold2, rr_low, rr_high, rr_miss);
+					//printf("Time = %i          RR = %i            R-Peak no. %i            R-Peak = %i            SPKF = %i            NPKF = %i            Threshold 1 = %i            Threshold 2 = %i            Low = %i            High = %i            Miss = %i\n", timeCount, rr, rPeak_pointer-1, peak[peak_pointer], spkf, npkf, threshold1, threshold2, rr_low, rr_high, rr_miss);
 
 					spkf = peak[peak_pointer]*0.125+spkf*0.875;
 
@@ -130,10 +130,10 @@ int main(){
 					threshold1 = npkf + (spkf - npkf)*0.25;
 					threshold2 = threshold1*0.5;
 
-//					printf("SPKF = %i   NPKF = %i   Threshold 1 = %i   Threshold 2 = %i\n" , spkf, npkf, threshold1, threshold2);
+					printf("Time = %i   i-value = %i  SPKF = %i   NPKF = %i   Threshold 1 = %i   Threshold 2 = %i   rr_average = %i   rr_average_ok = %i\n" ,timeCount, i, spkf, npkf, threshold1, threshold2, rr_average, rr_average_ok);
 
-					int pulse = 60000 / rr_average;
-					printf("pulse = %i   rr_average = %i\n", pulse, rr_average);
+					//int pulse = 60000 / rr_average;
+					//printf("pulse = %i   rr_average = %i\n", pulse, rr_average);
 
 					rr_interval_ok_pointer++;
 					if (rr_interval_ok_pointer >= interval_size)
@@ -169,9 +169,9 @@ int main(){
 									sum += rr_interval[j];
 								}
 
-								printf("sum = %i \n", sum);
+								//printf("sum = %i \n", sum);
 								rr_average = sum / interval_size;
-								printf("rr_average = %i\n",rr_average);
+								//printf("rr_average = %i\n",rr_average);
 
 								rr_low = rr_average*0.92;
 								rr_high = rr_average*1.16;
@@ -179,10 +179,10 @@ int main(){
 								threshold1 = npkf + (spkf - npkf)*0.25;
 								threshold2 = threshold1*0.5;
 
-								printf("Time = %i         RR = %i            R-Peak no. %i            Searchback R-Peak = %i              SPKF = %i            NPKF = %i            Threshold 1 = %i            Threshold 2 = %i            Low = %i            High = %i            Miss = %i\n", timeCount, rr, rPeak_pointer-1, peak[searchback_pointer], spkf, npkf, threshold1, threshold2, rr_low, rr_high, rr_miss);
+								//printf("Time = %i         RR = %i            R-Peak no. %i            Searchback R-Peak = %i              SPKF = %i            NPKF = %i            Threshold 1 = %i            Threshold 2 = %i            Low = %i            High = %i            Miss = %i\n", timeCount, rr, rPeak_pointer-1, peak[searchback_pointer], spkf, npkf, threshold1, threshold2, rr_low, rr_high, rr_miss);
 
 								int pulse = 60000 / rr_average;
-								printf("pulse = %i   rr_average = %i\n", pulse, rr_average);
+								//printf("pulse = %i   rr_average = %i\n", pulse, rr_average);
 
 								searchback_pointer = 0;	// Found a new R-peak - BREAK
 
@@ -193,7 +193,7 @@ int main(){
 							}
 						}
 					} else {
-						printf("Time = %i   Ignored %i   rr = %i   Miss = %i\n" , timeCount,  peak[peak_pointer], rr, rr_miss);
+						//printf("Time = %i   Ignored %i   rr = %i   Miss = %i\n" , timeCount,  peak[peak_pointer], rr, rr_miss);
 					}
 				}
 
