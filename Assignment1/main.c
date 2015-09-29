@@ -23,6 +23,7 @@ int timeCount = 0, timeDetected = 0, rr = 0, rr_interval[8] = {600,600,600,600,6
 int spkf = 4600, npkf = 3700, threshold1 = 4300, threshold2 = 2150, rr_average = 0, rr_average_ok = 0, rr_low = 480, rr_high = 720, rr_miss = 160;
 int skipped_beats = 0, vital_heartbeat_error = 0;
 
+FILE *filterFile;
 
 int getNextData(FILE *filename);
 int performLowPass(int a[], int b[], int, int);
@@ -35,12 +36,18 @@ int performMWI(int a[]);
 
 int applyFilters(){
 
+
 	lowPass_out[lowPass_pointer] = performLowPass(ECG_out, lowPass_out, ECG_pointer, lowPass_pointer);
 	highPass_out[highPass_pointer] = performHighPass(lowPass_out, highPass_out, lowPass_pointer, highPass_pointer);
 	derivative_out = performDerivative(highPass_out, highPass_pointer);
 	squaring_out[squaring_pointer] = performSquaring(derivative_out);
 	MWI_out = performMWI(squaring_out);
 
+	/*
+	 if (MWI_out > 0 && MWI_out < 20000){
+		fprintf(filterFile, "%d\n", lowPass_out[lowPass_pointer]);
+	}
+	*/
 
 	ECG_pointer++;
 	if (ECG_pointer >= ECG_size)
@@ -68,18 +75,16 @@ int isLocalMaximum(){
 
 
 int main(){
-	FILE *filename = fopen("ECG10800K.txt", "r");
-	FILE *filterFile = fopen("checkFile.txt", "w");
+	FILE *filename = fopen("ECG.txt", "r");
+	//filterFile = fopen("checkFile.txt", "w");
 
 	clock_t time = clock();
 
-	for (int i = 0; i < 500000; i++){
+	for (int i = 0; i < 10000; i++){
 		ECG_out[ECG_pointer] = getNextData(filename);
 		applyFilters();
 
-		//if (MWI_out > 0 && MWI_out < 20000){
-			fprintf(filterFile, "%d\n", MWI_out);
-		//}
+
 
 		timeCount += 4;
 
@@ -103,7 +108,7 @@ int main(){
 					rPeak[rPeak_pointer] = peak[peak_pointer];
 
 					if (rPeak[rPeak_pointer] < 2000)
-						printf("WARNING: Weak heartbeat\n");
+						printf("WARNING: Weak heartbeat!\n");
 
 					rPeak_pointer++;
 
@@ -130,7 +135,7 @@ int main(){
 					threshold1 = npkf + (spkf - npkf)*0.25;
 					threshold2 = threshold1*0.5;
 
-					printf("Time = %i   i-value = %i  SPKF = %i   NPKF = %i   Threshold 1 = %i   Threshold 2 = %i   rr_average = %i   rr_average_ok = %i\n" ,timeCount, i, spkf, npkf, threshold1, threshold2, rr_average, rr_average_ok);
+					//printf("Time = %i   i-value = %i  SPKF = %i   NPKF = %i   Threshold 1 = %i   Threshold 2 = %i   rr_average = %i   rr_average_ok = %i\n" ,timeCount, i, spkf, npkf, threshold1, threshold2, rr_average, rr_average_ok);
 
 					//int pulse = 60000 / rr_average;
 					//printf("pulse = %i   rr_average = %i\n", pulse, rr_average);
@@ -151,11 +156,11 @@ int main(){
 								rPeak[rPeak_pointer] = peak[searchback_pointer];
 
 								if (rPeak[rPeak_pointer] < 2000)
-									printf("Warning: Weak heartbeat");
+									printf("Warning: Weak heartbeat!\n");
 
 								skipped_beats++;
 								if (skipped_beats == 5) {
-									printf("WARNING: You have missed 5 regular R peaks\n");
+									printf("WARNING: You have missed 5 regular R peaks!\n");
 									skipped_beats = 0;
 								}
 
@@ -205,7 +210,7 @@ int main(){
 				threshold2 = threshold1*0.5;
 
 				if (vital_heartbeat_error == 10)
-					printf("WARNING: You're dying!\n");
+					printf("WARNING: Heart failure!\n");
 
 
 //				printf("SPKF = %i   NPKF = %i   Threshold 1 = %i   Threshold 2 = %i\n" , spkf, npkf, threshold1, threshold2);
