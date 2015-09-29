@@ -8,9 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-
-
-
+#include "sensor.h"
 
 int ECG_size = 13, lowPass_size = 33, highPass_size = 5, squaring_size = 30;
 int ECG_out[13] = {0}, lowPass_out[33] = {0}, highPass_out[5] = {0}, derivative_out = 0, squaring_out[30] = {0}, MWI_out = 0;
@@ -22,32 +20,22 @@ int timeCount = 0, timeDetected = 0, rr = 0, rr_interval[8] = {600,600,600,600,6
 
 int spkf = 4600, npkf = 3700, threshold1 = 4300, threshold2 = 2150, rr_average = 0, rr_average_ok = 0, rr_low = 480, rr_high = 720, rr_miss = 160;
 int skipped_beats = 0, vital_heartbeat_error = 0;
-
-FILE *filterFile;
+int pulse = 60000 / 600;
 
 int getNextData(FILE *filename);
-int performLowPass(int a[], int b[], int, int);
-int performHighPass(int a[], int b[], int, int);
-int performDerivative(int a[], int);
+int performLowPass(int a[], int b[], int a_pointer, int b_pointer, int a_size, int b_size);
+int performHighPass(int a[], int b[], int a_pointer, int b_pointer, int a_size, int b_size);
+int performDerivative(int a[], int a_pointer, int a_size);
 int performSquaring(int);
 int performMWI(int a[]);
 
-
-
 int applyFilters(){
 
-
-	lowPass_out[lowPass_pointer] = performLowPass(ECG_out, lowPass_out, ECG_pointer, lowPass_pointer);
-	highPass_out[highPass_pointer] = performHighPass(lowPass_out, highPass_out, lowPass_pointer, highPass_pointer);
-	derivative_out = performDerivative(highPass_out, highPass_pointer);
+	lowPass_out[lowPass_pointer] = performLowPass(ECG_out, lowPass_out, ECG_pointer, lowPass_pointer, ECG_size, lowPass_size);
+	highPass_out[highPass_pointer] = performHighPass(lowPass_out, highPass_out, lowPass_pointer, highPass_pointer, lowPass_size, highPass_size);
+	derivative_out = performDerivative(highPass_out, highPass_pointer, highPass_size);
 	squaring_out[squaring_pointer] = performSquaring(derivative_out);
 	MWI_out = performMWI(squaring_out);
-
-	/*
-	 if (MWI_out > 0 && MWI_out < 20000){
-		fprintf(filterFile, "%d\n", lowPass_out[lowPass_pointer]);
-	}
-	*/
 
 	ECG_pointer++;
 	if (ECG_pointer >= ECG_size)
@@ -72,169 +60,220 @@ int isLocalMaximum(){
 	return (peak_temp_new > MWI_out && peak_temp_old < peak_temp_new);
 }
 
+int average(int array[], int length) {
 
+	int sum = 0;
+
+	for (int i = 0; i < length; i++)
+		sum += array[i];
+
+	return sum/length;
+}
+
+int calculatePulse() {
+	return 60000 / rr_average;
+}
+
+int printData() {
+	printf("%i - Amplitude : %i   Pulse : %i\n", timeCount, rPeak[rPeak_pointer], pulse);
+	return 0;
+}
+
+int setRegularRPeak() {
+
+	// reset a warning variable, since a Rpeak has been detected
+	// if 5 peaks has not been an Rpeak in a row, a warning will be executed
+	skipped_beats = 0;
+
+	// add the peak to the Rpeak array
+	rPeak[rPeak_pointer] = peak[peak_pointer];
+
+	// check if a heartbeat has a low amplitude and warn the patient
+	if (rPeak[rPeak_pointer] < 2000)
+		printf("WARNING: Weak heartbeat\n");
+
+	// update rr_intervals with the new rr value
+	rr_interval[rr_interval_pointer] = rr;
+	rr_interval_ok[rr_interval_ok_pointer] = rr;
+
+	// set timeDetected to the last time an Rpeak was detected, which is now
+	timeDetected = timeCount;
+
+	// find the average of rr interval
+	rr_average = average(rr_interval, interval_size);
+	rr_average_ok = average(rr_interval_ok, interval_size);
+
+	// update dynamic values
+	rr_low = rr_average_ok*0.92;
+	rr_high = rr_average_ok*1.16;
+	rr_miss = rr_average_ok*1.66;
+
+	spkf = peak[peak_pointer]*0.125+spkf*0.875;
+	threshold1 = npkf + (spkf - npkf)*0.25;
+	threshold2 = threshold1*0.5;
+
+	// calculate the pulse
+	pulse = calculatePulse();
+
+	// set rr pointers
+	rr_interval_ok_pointer++;
+	if (rr_interval_ok_pointer >= interval_size)
+		rr_interval_ok_pointer = 0;
+
+	rr_interval_pointer++;
+	if (rr_interval_pointer >= interval_size)
+		rr_interval_pointer = 0;
+
+	// print required data
+	printData();
+
+	rPeak_pointer++;
+
+	return 0;
+}
+
+int doSearchBack() {
+
+	// search back in the normal peak array for a peak that is higher than threshold2 and register it as an R peak
+	for (int searchback_pointer = peak_pointer; searchback_pointer >= 0; searchback_pointer--) {
+		if (peak[searchback_pointer] > threshold2) {
+
+			// store the new R peak
+			rPeak[rPeak_pointer] = peak[searchback_pointer];
+
+			// warn the patient if the heart has a low amplitude
+			if (rPeak[rPeak_pointer] < 2000)
+				printf("Warning: Weak heartbeat\n");
+
+			// check if 5 regulat R peaks has been skipped and warn the patient
+			// will be reset if a regular R peak happens
+			skipped_beats++;
+			if (skipped_beats == 5) {
+				printf("WARNING: You have missed 5 regular R peaks\n");
+				skipped_beats = 0;
+			}
+
+			// update rr interval with the new rr value
+			rr_interval[rr_interval_pointer] = rr;
+
+			// set timeDetected to the last time an Rpeak was detected, which is now
+			timeDetected = timeCount;
+
+			// find the average of rr interval
+			rr_average = average(rr_interval, interval_size);
+
+			// update dynamic variables
+			rr_low = rr_average*0.92;
+			rr_high = rr_average*1.16;
+			rr_miss = rr_average*1.66;
+
+			spkf = peak[searchback_pointer]*0.25+spkf*0.75;
+			threshold1 = npkf + (spkf - npkf)*0.25;
+			threshold2 = threshold1*0.5;
+
+			// calculate the pulse
+			pulse = calculatePulse();
+
+			// update the rr pointers
+			rr_interval_pointer++;
+			if (rr_interval_pointer >= interval_size)
+				rr_interval_pointer = 0;
+
+			// print the required data
+			printData();
+
+			rPeak_pointer++;
+
+			break;
+		}
+	}
+
+	return 0;
+}
+
+int noRPeakDetected() {
+
+	// warn the patient if 10 peak in a row is not an R peak - very weak heart or abnormal behavior
+	vital_heartbeat_error++;
+	if (vital_heartbeat_error == 10)
+		printf("WARNING: You're dying!\n");
+
+	// update dynamic values
+	npkf = peak[peak_pointer]*0.125  + npkf*0.875;
+	threshold1 = npkf + (spkf - npkf)*0.25;
+	threshold2 = threshold1*0.5;
+
+	return 0;
+}
+
+int checkForPeaks() {
+
+	if (isLocalMaximum()) {
+
+		// add the new peak to the peak array
+		peak[peak_pointer] = peak_temp_new;
+
+		// check if the peak is above threshold1
+		if (peak[peak_pointer] > threshold1) {
+
+			// set rr to the time between the new peak and the last found Rpeak
+			rr = timeCount - timeDetected;
+
+			// reset a warning variable, if each reach 10, a warning will be executed
+			vital_heartbeat_error = 0;
+
+			// check if the rr value is between rr_low and rr_high
+			// if true, an Rpeak has been detected
+			if (rr_low < rr && rr < rr_high) {
+
+				setRegularRPeak();
+
+			} else {
+				if (rr > rr_miss) {
+
+					doSearchBack();
+
+				}
+			}
+
+		} else {
+
+			// if a peak is below threshold1
+			noRPeakDetected();
+
+		}
+
+		peak_pointer++;
+
+	}
+
+	peak_temp_old = peak_temp_new;
+	peak_temp_new = MWI_out;
+
+	return 0;
+}
 
 int main(){
+
 	FILE *filename = fopen("ECG.txt", "r");
-	//filterFile = fopen("checkFile.txt", "w");
 
 	clock_t time = clock();
 
 	for (int i = 0; i < 10000; i++){
-		ECG_out[ECG_pointer] = getNextData(filename);
-		applyFilters();
 
-
-
+		// add 4 milliseconds to the simulated time
 		timeCount += 4;
 
-		if (isLocalMaximum()) {
+		// retrieve data from file
+		ECG_out[ECG_pointer] = getNextData(filename);
 
-			peak[peak_pointer] = peak_temp_new;
-			//printf("%i \n", peak[peak_pointer]);
+		// apply all the filters
+		applyFilters();
 
-
-//			printf("Time = %i   Peak no. %i   Peak = %i\n", timeCount, peak_pointer, peak[peak_pointer]);
-
-			if (peak[peak_pointer] > threshold1) {
-				rr = timeCount - timeDetected;
-				vital_heartbeat_error = 0;
-			//	printf("%i", rr);
-
-
-				//printf("RR = %i   Low = %i   High = %i   Miss = %i\n", rr, rr_low, rr_high, rr_miss);
-				if (rr_low < rr && rr < rr_high) {
-					skipped_beats = 0;
-					rPeak[rPeak_pointer] = peak[peak_pointer];
-
-					if (rPeak[rPeak_pointer] < 2000)
-						printf("WARNING: Weak heartbeat!\n");
-
-					rPeak_pointer++;
-
-					//printf("Time = %i          RR = %i            R-Peak no. %i            R-Peak = %i            SPKF = %i            NPKF = %i            Threshold 1 = %i            Threshold 2 = %i            Low = %i            High = %i            Miss = %i\n", timeCount, rr, rPeak_pointer-1, peak[peak_pointer], spkf, npkf, threshold1, threshold2, rr_low, rr_high, rr_miss);
-
-					spkf = peak[peak_pointer]*0.125+spkf*0.875;
-
-					rr_interval[rr_interval_pointer] = rr;
-					rr_interval_ok[rr_interval_ok_pointer] = rr;
-					timeDetected = timeCount;
-
-					int sum_ok = 0, sum = 0;
-					for (int j = 0; j < interval_size; j++){
-						sum_ok += rr_interval_ok[j];
-						sum += rr_interval[j];
-					}
-
-					rr_average = sum / interval_size;
-					rr_average_ok = sum_ok / interval_size;
-					rr_low = rr_average_ok*0.92;
-					rr_high = rr_average_ok*1.16;
-					rr_miss = rr_average_ok*1.66;
-
-					threshold1 = npkf + (spkf - npkf)*0.25;
-					threshold2 = threshold1*0.5;
-
-					//printf("Time = %i   i-value = %i  SPKF = %i   NPKF = %i   Threshold 1 = %i   Threshold 2 = %i   rr_average = %i   rr_average_ok = %i\n" ,timeCount, i, spkf, npkf, threshold1, threshold2, rr_average, rr_average_ok);
-
-					//int pulse = 60000 / rr_average;
-					//printf("pulse = %i   rr_average = %i\n", pulse, rr_average);
-
-					rr_interval_ok_pointer++;
-					if (rr_interval_ok_pointer >= interval_size)
-						rr_interval_ok_pointer = 0;
-
-					rr_interval_pointer++;
-					if (rr_interval_pointer >= interval_size)
-						rr_interval_pointer = 0;
-
-				} else {
-					if (rr > rr_miss) {
-
-						for (int searchback_pointer = peak_pointer; searchback_pointer >= 0; searchback_pointer--) {
-							if (peak[searchback_pointer] > threshold2) {
-								rPeak[rPeak_pointer] = peak[searchback_pointer];
-
-								if (rPeak[rPeak_pointer] < 2000)
-									printf("Warning: Weak heartbeat!\n");
-
-								skipped_beats++;
-								if (skipped_beats == 5) {
-									printf("WARNING: You have missed 5 regular R peaks!\n");
-									skipped_beats = 0;
-								}
-
-								rPeak_pointer++;
-								spkf = peak[searchback_pointer]*0.25+spkf*0.75;
-								rr_interval[rr_interval_pointer] = rr;
-								timeDetected = timeCount;
-
-								int sum = 0;
-								for (int j = 0; j < interval_size; j++){
-									sum += rr_interval[j];
-								}
-
-								//printf("sum = %i \n", sum);
-								rr_average = sum / interval_size;
-								//printf("rr_average = %i\n",rr_average);
-
-								rr_low = rr_average*0.92;
-								rr_high = rr_average*1.16;
-								rr_miss = rr_average*1.66;
-								threshold1 = npkf + (spkf - npkf)*0.25;
-								threshold2 = threshold1*0.5;
-
-								//printf("Time = %i         RR = %i            R-Peak no. %i            Searchback R-Peak = %i              SPKF = %i            NPKF = %i            Threshold 1 = %i            Threshold 2 = %i            Low = %i            High = %i            Miss = %i\n", timeCount, rr, rPeak_pointer-1, peak[searchback_pointer], spkf, npkf, threshold1, threshold2, rr_low, rr_high, rr_miss);
-
-								int pulse = 60000 / rr_average;
-								//printf("pulse = %i   rr_average = %i\n", pulse, rr_average);
-
-								searchback_pointer = 0;	// Found a new R-peak - BREAK
-
-								rr_interval_pointer++;
-								if (rr_interval_pointer >= interval_size)
-									rr_interval_pointer = 0;
-
-							}
-						}
-					} else {
-						//printf("Time = %i   Ignored %i   rr = %i   Miss = %i\n" , timeCount,  peak[peak_pointer], rr, rr_miss);
-					}
-				}
-
-			} else {
-				vital_heartbeat_error++;
-
-				npkf = peak[peak_pointer]*0.125  + npkf*0.875;
-				threshold1 = npkf + (spkf - npkf)*0.25;
-				threshold2 = threshold1*0.5;
-
-				if (vital_heartbeat_error == 10)
-					printf("WARNING: Heart failure!\n");
-
-
-//				printf("SPKF = %i   NPKF = %i   Threshold 1 = %i   Threshold 2 = %i\n" , spkf, npkf, threshold1, threshold2);
-
-			}
-
-			peak_pointer++;
-
-		}
-
-		peak_temp_old = peak_temp_new;
-		peak_temp_new = MWI_out;
-
-
-		// printf("ECG: %i\t\t\t\t low-pass: %i\t\t\t\t high-pass: %i\t\t\t\t derivative: %i\t\t\t\t squaring: %i\t\t\t\t MWI: %i", ECG_out[ECG_pointer], lowPass_out[lowPass_pointer], highPass_out[highPass_pointer], derivative_out, squaring_out[squaring_pointer], MWI_out);
-
+		// check for peaks, more detailed within the function
+		checkForPeaks();
 
 	}
-
-
-	//for (int i = 0; i < 10000; i++){
-	//	if (peak[i] != 0) printf("Peak no. %i          Peak : %i          R-peak : %i\n", i+1, peak[i], rPeak[i]);
-	//}
-
 
 	printf("Execution time: %g\n", ((double) (clock()-time)) / CLOCKS_PER_SEC);
 
